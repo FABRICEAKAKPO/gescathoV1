@@ -1,0 +1,315 @@
+{
+  "audit_system": {
+    "version": "1.0",
+    "description": "Système d'audit complet pour Gescatho",
+    "tables": {
+      "activity_logs": {
+        "description": "Enregistrement de toutes les actions du système",
+        "columns": [
+          {
+            "name": "id",
+            "type": "bigint",
+            "nullable": false,
+            "description": "Identifiant unique"
+          },
+          {
+            "name": "user_id",
+            "type": "bigint",
+            "nullable": true,
+            "description": "Identifiant de l'utilisateur",
+            "foreign_key": "users.id"
+          },
+          {
+            "name": "user_name",
+            "type": "varchar(255)",
+            "nullable": true,
+            "description": "Snapshot du nom d'utilisateur"
+          },
+          {
+            "name": "user_role",
+            "type": "varchar(255)",
+            "nullable": true,
+            "description": "Snapshot du rôle utilisateur (admin, comptable, secrétaire)"
+          },
+          {
+            "name": "action",
+            "type": "varchar(255)",
+            "nullable": false,
+            "description": "Type d'action : create, update, delete"
+          },
+          {
+            "name": "model",
+            "type": "varchar(255)",
+            "nullable": false,
+            "description": "Classe du modèle affecté (e.g., App\\Models\\Don)"
+          },
+          {
+            "name": "model_id",
+            "type": "bigint",
+            "nullable": true,
+            "description": "Identifiant de l'enregistrement affecté"
+          },
+          {
+            "name": "old_values",
+            "type": "text",
+            "nullable": true,
+            "description": "JSON des valeurs avant modification"
+          },
+          {
+            "name": "new_values",
+            "type": "text",
+            "nullable": true,
+            "description": "JSON des valeurs après modification"
+          },
+          {
+            "name": "ip_address",
+            "type": "varchar(45)",
+            "nullable": true,
+            "description": "Adresse IP source de la requête"
+          },
+          {
+            "name": "user_agent",
+            "type": "text",
+            "nullable": true,
+            "description": "Informations du navigateur/client"
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp",
+            "nullable": false,
+            "description": "Date et heure de l'action"
+          },
+          {
+            "name": "updated_at",
+            "type": "timestamp",
+            "nullable": false,
+            "description": "Date et heure de la dernière mise à jour"
+          }
+        ],
+        "indexes": [
+          {
+            "name": "idx_user_created",
+            "columns": ["user_id", "created_at"],
+            "description": "Index pour requêtes par utilisateur et date"
+          },
+          {
+            "name": "idx_model_action",
+            "columns": ["model", "action"],
+            "description": "Index pour requêtes par type de modèle et action"
+          }
+        ]
+      }
+    },
+    "routes": [
+      {
+        "method": "GET",
+        "path": "/admin/activity-logs",
+        "name": "activity-logs.index",
+        "description": "Liste paginée des logs d'activité",
+        "middleware": ["auth", "role:admin"],
+        "pagination": 50,
+        "response": {
+          "logs": "Collection of ActivityLog",
+          "per_page": 50,
+          "total": "number"
+        }
+      },
+      {
+        "method": "GET",
+        "path": "/admin/activity-logs/{id}",
+        "name": "activity-logs.show",
+        "description": "Détails d'un log d'activité spécifique",
+        "middleware": ["auth", "role:admin"],
+        "parameters": {
+          "id": "ActivityLog ID"
+        },
+        "response": {
+          "log": "ActivityLog object"
+        }
+      }
+    ],
+    "models": {
+      "ActivityLog": {
+        "path": "app/Models/ActivityLog.php",
+        "relationships": [
+          {
+            "type": "belongsTo",
+            "related_model": "User",
+            "method": "user",
+            "description": "Utilisateur qui a effectué l'action"
+          }
+        ],
+        "methods": [
+          {
+            "name": "getActionLabel",
+            "returns": "string",
+            "description": "Retourne le label de l'action en français (Créé, Modifié, Supprimé)"
+          },
+          {
+            "name": "getActionBadgeColor",
+            "returns": "string",
+            "description": "Retourne la classe Tailwind pour la couleur du badge"
+          }
+        ],
+        "casts": {
+          "old_values": "array",
+          "new_values": "array"
+        }
+      }
+    },
+    "services": {
+      "ActivityLogger": {
+        "path": "app/Services/ActivityLogger.php",
+        "type": "Service",
+        "description": "Service pour enregistrer les activités utilisateur",
+        "methods": [
+          {
+            "name": "log",
+            "access": "public static",
+            "parameters": [
+              {"name": "action", "type": "string", "description": "create, update, delete"},
+              {"name": "model", "type": "string", "description": "Classe du modèle"},
+              {"name": "modelId", "type": "bigint", "description": "ID de l'enregistrement"},
+              {"name": "oldValues", "type": "array", "nullable": true},
+              {"name": "newValues", "type": "array", "nullable": true}
+            ],
+            "returns": "ActivityLog",
+            "description": "Enregistrement bas niveau d'une activité"
+          },
+          {
+            "name": "logCreate",
+            "access": "public static",
+            "parameters": [
+              {"name": "model", "type": "string", "description": "Classe du modèle"},
+              {"name": "modelId", "type": "bigint", "description": "ID de l'enregistrement"},
+              {"name": "newValues", "type": "array", "description": "Données créées"}
+            ],
+            "returns": "ActivityLog",
+            "description": "Enregistrement pour création d'entité"
+          },
+          {
+            "name": "logUpdate",
+            "access": "public static",
+            "parameters": [
+              {"name": "model", "type": "string", "description": "Classe du modèle"},
+              {"name": "modelId", "type": "bigint", "description": "ID de l'enregistrement"},
+              {"name": "oldValues", "type": "array", "description": "Données avant modification"},
+              {"name": "newValues", "type": "array", "description": "Données après modification"}
+            ],
+            "returns": "ActivityLog",
+            "description": "Enregistrement pour modification d'entité"
+          },
+          {
+            "name": "logDelete",
+            "access": "public static",
+            "parameters": [
+              {"name": "model", "type": "string", "description": "Classe du modèle"},
+              {"name": "modelId", "type": "bigint", "description": "ID de l'enregistrement"},
+              {"name": "oldValues", "type": "array", "description": "Données supprimées"}
+            ],
+            "returns": "ActivityLog",
+            "description": "Enregistrement pour suppression d'entité"
+          }
+        ]
+      }
+    },
+    "controllers": {
+      "ActivityLogController": {
+        "path": "app/Http/Controllers/ActivityLogController.php",
+        "description": "Contrôleur pour afficher les logs d'activité",
+        "actions": [
+          {
+            "name": "index",
+            "method": "GET",
+            "route": "/admin/activity-logs",
+            "description": "Affiche la liste paginée des logs",
+            "response": "view activity-logs.index"
+          },
+          {
+            "name": "show",
+            "method": "GET",
+            "route": "/admin/activity-logs/{id}",
+            "description": "Affiche les détails d'un log",
+            "response": "view activity-logs.show"
+          }
+        ]
+      }
+    },
+    "views": {
+      "activity-logs/index": {
+        "path": "resources/views/activity-logs/index.blade.php",
+        "description": "Liste des logs d'activité",
+        "variables": {
+          "logs": "Paginated collection of ActivityLog"
+        },
+        "features": [
+          "Tableau avec 50 logs par page",
+          "Colonnes: Utilisateur, Rôle, Action, Entité, Date/Heure",
+          "Badges colorés pour actions et rôles",
+          "Lien vers détails de chaque log"
+        ]
+      },
+      "activity-logs/show": {
+        "path": "resources/views/activity-logs/show.blade.php",
+        "description": "Détails d'un log d'activité",
+        "variables": {
+          "log": "ActivityLog object"
+        },
+        "features": [
+          "Informations utilisateur",
+          "Détails de l'action",
+          "Comparaison avant/après pour modifications",
+          "Données créées/supprimées"
+        ]
+      }
+    },
+    "audited_entities": [
+      {
+        "name": "Don",
+        "model": "App\\Models\\Don",
+        "tracked_actions": ["create", "update", "delete"],
+        "controller": "DonController"
+      },
+      {
+        "name": "DepenseDon",
+        "model": "App\\Models\\DepenseDon",
+        "tracked_actions": ["create", "update", "delete"],
+        "controller": "DonController"
+      },
+      {
+        "name": "Recette",
+        "model": "App\\Models\\Recette",
+        "tracked_actions": ["create", "delete"],
+        "controller": "RecetteController"
+      },
+      {
+        "name": "Depense",
+        "model": "App\\Models\\Depense",
+        "tracked_actions": ["create", "delete"],
+        "controller": "DepenseController"
+      }
+    ],
+    "access_control": {
+      "view_logs": "admin only",
+      "logged_actions": "all users",
+      "ip_tracking": "all requests",
+      "user_agent_tracking": "all requests"
+    },
+    "migration": {
+      "timestamp": "2026_01_27_150000",
+      "name": "create_activity_logs_table",
+      "file": "database/migrations/2026_01_27_150000_create_activity_logs_table.php"
+    },
+    "tests": {
+      "file": "tests/Feature/ActivityLoggingTest.php",
+      "test_count": 6,
+      "coverage": [
+        "Activity log creation on entity creation",
+        "Activity log creation on entity update",
+        "Activity log creation on entity deletion",
+        "Admin access to activity logs",
+        "Non-admin denied access to activity logs"
+      ]
+    }
+  }
+}
